@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Elementor HTML Converter — Build Editable Layout</title>
+    <!-- Tailwind CSS via CDN untuk styling tool -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <style>
+        /* Custom style untuk drag & drop area */
+        .drop-zone {
+            border: 2px dashed #d1d5db;
+            transition: all 0.3s ease;
+        }
+        .drop-zone.dragover {
+            border-color: #6366f1;
+            background-color: #eef2ff;
+        }
+        /* Scroll area untuk hasil */
+        .preview-scroll {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        /* Animasi loading */
+        .spinner {
+            border: 3px solid #e5e7eb;
+            border-top: 3px solid #6366f1;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Highlight untuk code */
+        .code-block {
+            background: #1e1e2e;
+            color: #cdd6f4;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            padding: 1rem;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <!-- ========== HEADER ========== -->
+    <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 text-white p-2 rounded-lg">
+                    <i class="fas fa-code text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-800">Elementor HTML Converter</h1>
+                    <p class="text-xs text-gray-500">HTML → Widget Native Elementor (Editable)</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3 text-sm text-gray-500">
+                <i class="fas fa-shield-alt text-green-500"></i>
+                <span>100% Client-side</span>
+                <span class="hidden sm:inline">|</span>
+                <span class="hidden sm:inline"><i class="fas fa-database"></i> No data stored</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ========== MAIN ========== -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- Step indicator -->
+        <div class="flex items-center justify-center space-x-4 mb-8 text-sm">
+            <span class="flex items-center space-x-2 text-indigo-600 font-semibold">
+                <span class="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">1</span>
+                <span>Paste HTML</span>
+            </span>
+            <i class="fas fa-arrow-right text-gray-300"></i>
+            <span class="flex items-center space-x-2 text-gray-400">
+                <span class="bg-gray-300 text-gray-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>
+                <span>Konversi & Analisis</span>
+            </span>
+            <i class="fas fa-arrow-right text-gray-300"></i>
+            <span class="flex items-center space-x-2 text-gray-400">
+                <span class="bg-gray-300 text-gray-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
+                <span>Ekspor JSON</span>
+            </span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            <!-- ====== KOLOM KIRI : INPUT ====== -->
+            <div class="space-y-4">
+
+                <!-- Drop Zone -->
+                <div id="dropZone" class="drop-zone rounded-xl bg-white p-8 text-center cursor-pointer hover:bg-gray-50 transition">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-indigo-400 mb-3"></i>
+                    <p class="text-gray-600 font-medium">Drag &amp; drop file <code class="bg-gray-100 px-2 py-0.5 rounded text-sm">.html</code></p>
+                    <p class="text-gray-400 text-sm mt-1">atau klik untuk memilih file</p>
+                    <input type="file" id="fileInput" accept=".html,.htm" class="hidden" />
+                    <div class="mt-4 text-xs text-gray-400">
+                        <span class="inline-block bg-gray-100 px-3 py-1 rounded-full">Atau paste HTML di bawah</span>
+                    </div>
+                </div>
+
+                <!-- Textarea untuk paste manual -->
+                <div>
+                    <label for="htmlInput" class="block text-sm font-medium text-gray-700 mb-1">Tempelkan HTML di sini</label>
+                    <textarea id="htmlInput" rows="10" class="w-full border border-gray-300 rounded-lg p-3 font-mono text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="<html> ... paste kode HTML Anda di sini ... </html>"></textarea>
+                </div>
+
+                <!-- Tombol aksi -->
+                <div class="flex flex-wrap gap-3">
+                    <button id="convertBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-6 rounded-lg transition flex items-center space-x-2 shadow-sm">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>Convert &amp; Analyze</span>
+                    </button>
+                    <button id="clearBtn" class="border border-gray-300 hover:bg-gray-100 text-gray-700 font-medium py-2.5 px-4 rounded-lg transition flex items-center space-x-2">
+                        <i class="fas fa-undo-alt"></i>
+                        <span>Clear</span>
+                    </button>
+                    <button id="sampleBtn" class="border border-gray-300 hover:bg-gray-100 text-gray-700 font-medium py-2.5 px-4 rounded-lg transition flex items-center space-x-2">
+                        <i class="fas fa-file-code"></i>
+                        <span>Sample HTML</span>
+                    </button>
+                </div>
+
+                <!-- Info proses -->
+                <div id="infoBox" class="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg hidden">
+                    <i class="fas fa-info-circle text-indigo-500 mr-2"></i>
+                    <span id="infoMessage">Siap memproses...</span>
+                </div>
+
+                <!-- Loading -->
+                <div id="loadingIndicator" class="hidden flex items-center space-x-3 p-3 bg-indigo-50 rounded-lg">
+                    <div class="spinner"></div>
+                    <span class="text-indigo-700 font-medium">Menganalisis dan memetakan DOM...</span>
+                </div>
+            </div>
+
+            <!-- ====== KOLOM KANAN : OUTPUT ====== -->
+            <div class="space-y-4">
+
+                <!-- Statistik -->
+                <div id="statsBox" class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 hidden">
+                    <div class="grid grid-cols-3 gap-3 text-center">
+                        <div>
+                            <p class="text-2xl font-bold text-indigo-600" id="statContainers">0</p>
+                            <p class="text-xs text-gray-500">Containers</p>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-indigo-600" id="statWidgets">0</p>
+                            <p class="text-xs text-gray-500">Widgets</p>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-indigo-600" id="statStyles">0</p>
+                            <p class="text-xs text-gray-500">Styles extracted</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview JSON -->
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-sm font-medium text-gray-700">Hasil JSON — Elementor Schema</label>
+                        <span class="text-xs text-gray-400" id="jsonSize"></span>
+                    </div>
+                    <div class="relative">
+                        <pre id="jsonOutput" class="code-block preview-scroll text-xs"><span class="text-gray-400">// Hasil konversi akan tampil di sini</span></pre>
+                        <button id="copyJsonBtn" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded transition opacity-70 hover:opacity-100">
+                            <i class="far fa-copy mr-1"></i> Copy
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tombol Ekspor -->
+                <div class="flex flex-wrap gap-3">
+                    <button id="exportJsonBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-6 rounded-lg transition flex items-center space-x-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <i class="fas fa-download"></i>
+                        <span>Export JSON (Impor ke Elementor)</span>
+                    </button>
+                    <button id="exportHtmlBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2.5 px-6 rounded-lg transition flex items-center space-x-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <i class="fas fa-file-code"></i>
+                        <span>Export Shielded HTML</span>
+                    </button>
+                </div>
+
+                <!-- Panduan Ekspor -->
+                <div id="guideBox" class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 hidden">
+                    <h4 class="font-semibold flex items-center space-x-2">
+                        <i class="fas fa-rocket text-blue-600"></i>
+                        <span>Cara Impor ke Elementor</span>
+                    </h4>
+                    <ol class="list-decimal list-inside space-y-1 mt-2 text-blue-700">
+                        <li>Download file <strong>.json</strong> hasil ekspor</li>
+                        <li>Masuk ke <strong>WordPress Dashboard → Templates → Saved Templates</strong></li>
+                        <li>Klik <strong>Import Templates</strong> dan unggah file .json</li>
+                        <li>Buka halaman Elementor, klik folder <i class="far fa-folder-open"></i> → <strong>My Templates</strong>, lalu sisipkan template</li>
+                        <li><span class="bg-yellow-200 px-2 py-0.5 rounded">Tips:</span> Semua widget <strong>dapat diedit</strong> seperti biasa!</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== BAGIAN BAWAH : LOG DETAIL ====== -->
+        <div class="mt-10 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                <span class="font-medium text-gray-700"><i class="fas fa-list-ul mr-2 text-indigo-500"></i>Log Proses</span>
+                <button id="clearLogBtn" class="text-xs text-gray-400 hover:text-gray-600">Clear log</button>
+            </div>
+            <div id="logContainer" class="p-4 font-mono text-xs bg-gray-900 text-gray-300 max-h-48 overflow-y-auto">
+                <div class="text-green-400">[System] ✅ Elementor HTML Converter siap digunakan.</div>
+                <div class="text-gray-500">[System] Tempelkan HTML atau upload file untuk memulai.</div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ========== FOOTER ========== -->
+    <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-xs text-gray-400 border-t border-gray-200 mt-8">
+        <p>Built with ❤️ — 100% client-side, private &amp; secure. Tidak ada data yang dikirim ke server.</p>
+    </footer>
+
+    <!-- ========================================================== -->
+    <!-- ======================== JAVASCRIPT ======================== -->
+    <!-- ========================================================== -->
+    <script>
+        (function() {
+            'use strict';
+
+            // ============================================================
+            // 1. DOM REFS
+            // ============================================================
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+            const htmlInput = document.getElementById('htmlInput');
+            const convertBtn = document.getElementById('convertBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const sampleBtn = document.getElementById('sampleBtn');
+            const jsonOutput = document.getElementById('jsonOutput');
+            const jsonSize = document.getElementById('jsonSize');
+            const copyJsonBtn = document.getElementById('copyJsonBtn');
+            const exportJsonBtn = document.getElementById('exportJsonBtn');
+            const exportHtmlBtn = document.getElementById('exportHtmlBtn');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const infoBox = document.getElementById('infoBox');
+            const infoMessage = document.getElementById('infoMessage');
+            const statsBox = document.getElementById('statsBox');
+            const statContainers = document.getElementById('statContainers');
+            const statWidgets = document.getElementById('statWidgets');
+            const statStyles = document.getElementById('statStyles');
+            const guideBox = document.getElementById('guideBox');
+            const logContainer = document.getElementById('logContainer');
+            const clearLogBtn = document.getElementById('clearLogBtn');
+
+            // ============================================================
+            // 2. STATE
+            // ============================================================
+            let currentJson = null; // object JSON final
+            let currentShieldedHtml = null; // string HTML terisolasi
+
+            // ============================================================
+            // 3. LOGGING
+            // ============================================================
+            function addLog(message, type = 'info') {
+                const colors = {
+                    info: 'text-blue-400',
+                    success: 'text-green-400',
+                    warning: 'text-yellow-400',
+                    error: 'text-red-400',
+                    system: 'text-gray-500'
+                };
+                const time = new Date().toLocaleTimeString();
+                const div = document.createElement('div');
+                div.className = colors[type] || 'text-gray-300';
+                div.textContent = `[${time}] ${message}`;
+                logContainer.appendChild(div);
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+
+            function clearLog() {
+                logContainer.innerHTML = '';
+                addLog('Log dibersihkan.', 'system');
+            }
+            clearLogBtn.addEventListener('click', clearLog);
+
+            // ============================================================
+            // 4. UTILITY FUNCTIONS
+            // ============================================================
+            function generateId(length = 8) {
+                return 'mp-' + Math.random().toString(36).substring(2, 2 + length);
+            }
+
+            // Format JSON dengan indentation
+            function prettyJson(obj) {
+                return JSON.stringify(obj, null, 2);
+            }
+
+            // Download file
+            function downloadFile(content, filename, mime = 'application/json') {
+                const blob = new Blob([content], { type: mime });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                addLog(`📥 File "${filename}" didownload (${(blob.size / 1024).toFixed(1)} KB)`, 'success');
+            }
+
+            // ============================================================
+            // 5. CORE CONVERTER — sesuai alur kerja
+            // ============================================================
+            function convertHtmlToElementor(htmlString) {
+                addLog('🔄 Memulai konversi HTML → Elementor JSON...', 'info');
+
+                // --- STEP 1: Parse DOM ---
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlString, 'text/html');
+                const body = doc.body;
+
+                // Ekstrak computed styles (simulasi: kita baca dari elemen)
+                // Catatan: di real app, kita perlu memasukkan CSS untuk di-compute.
+                // Di sini kita gunakan pendekatan: baca inline style + tebak dari tag.
+
+                addLog('📄 DOM parsed, memulai traversal...', 'info');
+
+                // --- STEP 2: Filtering (hapus script, style, meta) ---
+                const unwanted = ['script', 'style', 'meta', 'link', 'noscript'];
+                unwanted.forEach(tag => {
+                    const els = body.querySelectorAll(tag);
+                    els.forEach(el => el.remove());
+                });
+                addLog(`🧹 Filtered: removed ${unwanted.join(', ')}`, 'info');
+
+                // --- STEP 3: Recursive DOM Traversal & Mapping ---
+                let containerCount = 0;
+                let widgetCount = 0;
+                let styleCount = 0;
+
+                // Fungsi untuk mengekstrak style dari elemen
+                function extractStyles(el) {
+                    const styles = {};
+                    const computed = window.getComputedStyle(el);
+                    // Ambil properti yang umum
+                    const props = [
+                        'color', 'font-family', 'font-size', 'font-weight',
+                        'line-height', 'text-align', 'background-color',
+                        'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+                        'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+                        'border-radius', 'border-width', 'border-color',
+                        'display', 'flex-direction', 'justify-content', 'align-items',
+                        'gap', 'width', 'height', 'max-width', 'min-height'
+                    ];
+                    props.forEach(p => {
+                        const val = computed.getPropertyValue(p);
+                        if (val && val !== 'none' && val !== 'normal' && val !== '0px') {
+                            styles[p] = val;
+                            styleCount++;
+                        }
+                    });
+                    // Inline style override
+                    if (el.style.cssText) {
+                        const inline = el.style;
+                        for (let i = 0; i < inline.length; i++) {
+                            const key = inline[i];
+                            const val = inline.getPropertyValue(key);
+                            if (val) {
+                                styles[key] = val;
+                            }
+                        }
+                    }
+                    return styles;
+                }
+
+                // Fungsi rekursif utama
+                function mapNode(el) {
+                    const children = el.children;
+                    const hasChildElements = children.length > 0;
+
+                    // Tentukan apakah container atau widget
+                    const isContainer = hasChildElements &&
+                        (el.tagName.match(/^(DIV|SECTION|HEADER|FOOTER|MAIN|ARTICLE|ASIDE|NAV|UL|OL|LI)$/i) ||
+                        el.style.display === 'flex' || el.style.display === 'grid' ||
+                        el.style.display === 'block');
+
+                    if (isContainer) {
+                        containerCount++;
+                        // --- MAP ke Container ---
+                        const container = {
+                            id: generateId(),
+                            elType: 'container',
+                            settings: {
+                                container_type: 'boxed',
+                                content_width: 'boxed',
+                                flex_direction: 'column',
+                                flex_justify_content: 'flex-start',
+                                flex_align_items: 'stretch'
+                            },
+                            elements: []
+                        };
+
+                        // Ekstrak style ke settings
+                        const styles = extractStyles(el);
+                        // Map padding
+                        if (styles['padding-top']) container.settings.padding = {
+                            unit: 'px',
+                            top: styles['padding-top'],
+                            right: styles['padding-right'] || '0',
+                            bottom: styles['padding-bottom'] || '0',
+                            left: styles['padding-left'] || '0'
+                        };
+                        if (styles['background-color']) container.settings.background_color = styles['background-color'];
+                        // Flex
+                        if (styles['display'] === 'flex') {
+                            container.settings.flex_direction = styles['flex-direction'] || 'column';
+                            container.settings.flex_justify_content = styles['justify-content'] || 'flex-start';
+                            container.settings.flex_align_items = styles['align-items'] || 'stretch';
+                            if (styles['gap']) container.settings.flex_gap = styles['gap'];
+                        }
+
+                        // Proses anak
+                        for (let child of children) {
+                            const mapped = mapNode(child);
+                            if (mapped) container.elements.push(mapped);
+                        }
+
+                        return container;
+
+                    } else {
+                        // --- MAP ke Widget ---
+                        widgetCount++;
+                        const tag = el.tagName.toLowerCase();
+                        let widgetType = 'text-editor';
+                        let settings = {};
+
+                        // Tentukan widgetType
+                        if (tag.match(/^h[1-6]$/)) widgetType = 'heading';
+                        else if (tag === 'p') widgetType = 'text-editor';
+                        else if (tag === 'img') widgetType = 'image';
+                        else if (tag === 'a' || tag === 'button') widgetType = 'button';
+                        else if (tag === 'ul' || tag === 'ol') widgetType = 'text-editor';
+                        else if (tag === 'blockquote') widgetType = 'text-editor';
+                        else if (tag === 'figure') widgetType = 'image';
+                        else if (tag === 'iframe') widgetType = 'html';
+                        else widgetType = 'text-editor'; // fallback
+
+                        // Ekstrak style
+                        const styles = extractStyles(el);
+
+                        // Isi settings
+                        if (widgetType === 'heading') {
+                            settings.title = el.textContent.trim() || 'Heading';
+                            settings.header_size = 'h' + (tag.replace('h', '') || '2');
+                            if (styles['color']) settings.title_color = styles['color'];
+                            if (styles['font-family']) settings.typography_font_family = styles['font-family'];
+                            if (styles['font-size']) settings.typography_font_size = { unit: 'px', size: styles['font-size'] };
+                            if (styles['font-weight']) settings.typography_font_weight = styles['font-weight'];
+                            if (styles['text-align']) settings.align = styles['text-align'];
+                        } else if (widgetType === 'text-editor') {
+                            settings.editor = `<p>${el.innerHTML || el.textContent}</p>`;
+                            if (styles['color']) settings.text_color = styles['color'];
+                            if (styles['font-family']) settings.typography_font_family = styles['font-family'];
+                            if (styles['font-size']) settings.typography_font_size = { unit: 'px', size: styles['font-size'] };
+                        } else if (widgetType === 'image') {
+                            const src = el.getAttribute('src') || el.querySelector('img')?.getAttribute('src') || '';
+                            settings.image = { url: src };
+                            if (el.getAttribute('alt')) settings.image_alt = el.getAttribute('alt');
+                            if (styles['width']) settings.width = { unit: '%', size: '100' };
+                        } else if (widgetType === 'button') {
+                            settings.text = el.textContent.trim() || 'Button';
+                            const href = el.getAttribute('href') || '#';
+                            settings.link = { url: href };
+                            if (styles['background-color']) settings.background_color = styles['background-color'];
+                            if (styles['color']) settings.button_text_color = styles['color'];
+                            if (styles['border-radius']) settings.border_radius = { unit: 'px', top: styles['border-radius'] };
+                        } else {
+                            // fallback text
+                            settings.editor = `<div>${el.outerHTML}</div>`;
+                        }
+
+                        // Tambahkan padding/margin umum
+                        if (styles['padding-top']) settings.padding = {
+                            unit: 'px',
+                            top: styles['padding-top'],
+                            right: styles['padding-right'] || '0',
+                            bottom: styles['padding-bottom'] || '0',
+                            left: styles['padding-left'] || '0'
+                        };
+                        if (styles['margin-top']) settings.margin = {
+                            unit: 'px',
+                            top: styles['margin-top'],
+                            right: styles['margin-right'] || '0',
+                            bottom: styles['margin-bottom'] || '0',
+                            left: styles['margin-left'] || '0'
+                        };
+
+                        // Tambahkan CSS custom jika ada style yang tidak terpetakan (fallback)
+                        const customCss = [];
+                        for (const [key, val] of Object.entries(styles)) {
+                            if (!['color', 'font-family', 'font-size', 'font-weight', 'line-height', 'text-align',
+                                    'background-color', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+                                    'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'border-radius',
+                                    'display', 'flex-direction', 'justify-content', 'align-items', 'gap',
+                                    'width', 'height', 'max-width', 'min-height'
+                                ].includes(key)) {
+                                customCss.push(`${key}: ${val};`);
+                            }
+                        }
+                        if (customCss.length > 0) {
+                            settings._custom_css = customCss.join(' ');
+                            addLog(`⚠️ ${widgetType} memiliki gaya tambahan (${customCss.length}) disimpan di _custom_css`, 'warning');
+                        }
+
+                        const widget = {
+                            id: generateId(),
+                            elType: 'widget',
+                            widgetType: widgetType,
+                            settings: settings
+                        };
+
+                        return widget;
+                    }
+                }
+
+                // Mulai traversal dari body
+                const rootElements = [];
+                for (let child of body.children) {
+                    const mapped = mapNode(child);
+                    if (mapped) rootElements.push(mapped);
+                }
+
+                // --- STEP 4: Assembly JSON Schema ---
+                const finalJson = {
+                    version: '0.4',
+                    title: 'Converted from HTML',
+                    type: 'page',
+                    content: rootElements,
+                    page_settings: {}
+                };
+
+                addLog(`✅ Konversi selesai: ${containerCount} containers, ${widgetCount} widgets, ${styleCount} styles`, 'success');
+
+                // Update stat
+                statContainers.textContent = containerCount;
+                statWidgets.textContent = widgetCount;
+                statStyles.textContent = styleCount;
+                statsBox.classList.remove('hidden');
+
+                return finalJson;
+            }
+
+            // ============================================================
+            // 6. SHIELDED HTML GENERATOR (opsional)
+            // ============================================================
+            function generateShieldedHtml(htmlString) {
+                const scopeId = generateId();
+                // Tambahkan scoping: bungkus dengan div ber-ID, lalu prefix selector
+                // Sederhana: kita wrap body dengan div scope
+                const wrapped = `<div id="${scopeId}" style="all: initial; display: block;">${htmlString}</div>`;
+                // Tambahkan reset style
+                const resetCss = `
+                    #${scopeId} * {
+                        box-sizing: border-box;
+                        margin: 0;
+                        padding: 0;
+                    }
+                `;
+                const full = `
+                    <style>${resetCss}</style>
+                    ${wrapped}
+                `;
+                return full;
+            }
+
+            // ============================================================
+            // 7. MAIN PROCESS
+            // ============================================================
+            function processHtml(htmlString) {
+                if (!htmlString || htmlString.trim().length < 10) {
+                    addLog('❌ HTML terlalu pendek atau kosong.', 'error');
+                    infoMessage.textContent = 'Error: HTML tidak valid atau terlalu pendek.';
+                    infoBox.classList.remove('hidden');
+                    return;
+                }
+
+                // Tampilkan loading
+                loadingIndicator.classList.remove('hidden');
+                convertBtn.disabled = true;
+                exportJsonBtn.disabled = true;
+                exportHtmlBtn.disabled = true;
+                infoBox.classList.add('hidden');
+                statsBox.classList.add('hidden');
+                guideBox.classList.add('hidden');
+
+                // Proses dengan sedikit delay agar UI ter-update
+                setTimeout(() => {
+                    try {
+                        // Normalisasi: pastikan ada body
+                        let cleanHtml = htmlString;
+                        if (!cleanHtml.match(/<body/i)) {
+                            cleanHtml = `<body>${cleanHtml}</body>`;
+                        }
+                        if (!cleanHtml.match(/<html/i)) {
+                            cleanHtml = `<html>${cleanHtml}</html>`;
+                        }
+
+                        // Konversi
+                        const result = convertHtmlToElementor(cleanHtml);
+                        currentJson = result;
+
+                        // Tampilkan JSON
+                        const jsonStr = prettyJson(result);
+                        jsonOutput.textContent = jsonStr;
+                        jsonSize.textContent = `${(jsonStr.length / 1024).toFixed(1)} KB`;
+
+                        // Generate shielded HTML
+                        currentShieldedHtml = generateShieldedHtml(cleanHtml);
+
+                        // Aktifkan tombol ekspor
+                        exportJsonBtn.disabled = false;
+                        exportHtmlBtn.disabled = false;
+
+                        // Tampilkan panduan
+                        guideBox.classList.remove('hidden');
+
+                        addLog(`📊 JSON size: ${(jsonStr.length / 1024).toFixed(1)} KB`, 'info');
+                        infoMessage.textContent = `✅ Konversi berhasil! ${result.content.length} elemen root.`;
+                        infoBox.classList.remove('hidden');
+                        infoBox.className = 'text-sm bg-green-50 p-3 rounded-lg border border-green-200';
+
+                    } catch (err) {
+                        addLog(`❌ Error: ${err.message}`, 'error');
+                        infoMessage.textContent = `Error: ${err.message}`;
+                        infoBox.classList.remove('hidden');
+                        infoBox.className = 'text-sm bg-red-50 p-3 rounded-lg border border-red-200';
+                        jsonOutput.textContent = `// Error: ${err.message}`;
+                    } finally {
+                        loadingIndicator.classList.add('hidden');
+                        convertBtn.disabled = false;
+                    }
+                }, 300);
+            }
+
+            // ============================================================
+            // 8. EVENT LISTENERS
+            // ============================================================
+
+            // --- Convert button ---
+            convertBtn.addEventListener('click', function() {
+                const html = htmlInput.value;
+                processHtml(html);
+            });
+
+            // --- Clear button ---
+            clearBtn.addEventListener('click', function() {
+                htmlInput.value = '';
+                jsonOutput.textContent = '// Hasil konversi akan tampil di sini';
+                jsonSize.textContent = '';
+                statsBox.classList.add('hidden');
+                guideBox.classList.add('hidden');
+                exportJsonBtn.disabled = true;
+                exportHtmlBtn.disabled = true;
+                currentJson = null;
+                currentShieldedHtml = null;
+                infoBox.classList.add('hidden');
+                addLog('🧹 Semua data dibersihkan.', 'system');
+            });
+
+            // --- Sample HTML ---
+            sampleBtn.addEventListener('click', function() {
+                const sample = `<!DOCTYPE html>
+        <html>
+        <head><title>Sample Landing</title></head>
+        <body>
+          <header style="background: #4f46e5; color: white; padding: 20px; text-align: center;">
+            <h1>Selamat Datang di Converter</h1>
+            <p style="font-size: 18px;">Ubah HTML menjadi widget Elementor yang dapat diedit!</p>
+          </header>
+          <section style="display: flex; gap: 20px; padding: 30px; max-width: 900px; margin: auto;">
+            <div style="flex: 1; background: #f3f4f6; padding: 20px; border-radius: 12px;">
+              <h2>Fitur 1</h2>
+              <p>Mapping otomatis ke Container & Widget Elementor.</p>
+              <a href="#" style="display: inline-block; background: #4f46e5; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">Coba Sekarang</a>
+            </div>
+            <div style="flex: 1; background: #f3f4f6; padding: 20px; border-radius: 12px;">
+              <h2>Fitur 2</h2>
+              <p>Ekspor JSON siap impor ke Elementor Templates.</p>
+              <img src="https://placehold.co/400x200/4f46e5/white?text=Preview" style="width: 100%; border-radius: 8px;" />
+            </div>
+          </section>
+          <footer style="text-align: center; padding: 20px; color: #6b7280; border-top: 1px solid #e5e7eb; margin-top: 20px;">
+            <p>&copy; 2026 Elementor HTML Converter</p>
+          </footer>
+        </body>
+        </html>`;
+                htmlInput.value = sample;
+                addLog('📝 Sample HTML dimuat.', 'info');
+                // Auto convert
+                processHtml(sample);
+            });
+
+            // --- Export JSON ---
+            exportJsonBtn.addEventListener('click', function() {
+                if (!currentJson) {
+                    addLog('❌ Tidak ada data JSON untuk diekspor.', 'error');
+                    return;
+                }
+                const jsonStr = prettyJson(currentJson);
+                downloadFile(jsonStr, 'elementor-template.json', 'application/json');
+            });
+
+            // --- Export Shielded HTML ---
+            exportHtmlBtn.addEventListener('click', function() {
+                if (!currentShieldedHtml) {
+                    addLog('❌ Tidak ada HTML untuk diekspor.', 'error');
+                    return;
+                }
+                downloadFile(currentShieldedHtml, 'shielded-widget.html', 'text/html');
+                addLog('🛡️ Shielded HTML didownload. Bisa dipaste ke widget Custom HTML Elementor.', 'success');
+            });
+
+            // --- Copy JSON ---
+            copyJsonBtn.addEventListener('click', function() {
+                const text = jsonOutput.textContent;
+                if (text && !text.startsWith('//')) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        addLog('📋 JSON berhasil disalin ke clipboard!', 'success');
+                    }).catch(() => {
+                        // fallback
+                        const range = document.createRange();
+                        range.selectNode(jsonOutput);
+                        window.getSelection().removeAllRanges();
+                        window.getSelection().addRange(range);
+                        document.execCommand('copy');
+                        addLog('📋 JSON disalin (fallback).', 'success');
+                    });
+                } else {
+                    addLog('❌ Tidak ada JSON untuk disalin.', 'warning');
+                }
+            });
+
+            // --- Drag & Drop ---
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('dragover');
+            });
+            dropZone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+            });
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0 && files[0].name.match(/\.html?$/i)) {
+                    const reader = new FileReader();
+                    reader.onload = function(ev) {
+                        htmlInput.value = ev.target.result;
+                        addLog(`📂 File "${files[0].name}" dimuat (${(ev.target.result.length / 1024).toFixed(1)} KB)`, 'success');
+                        processHtml(ev.target.result);
+                    };
+                    reader.readAsText(files[0]);
+                } else {
+                    addLog('❌ Tolong upload file .html', 'error');
+                }
+            });
+            dropZone.addEventListener('click', function() {
+                fileInput.click();
+            });
+            fileInput.addEventListener('change', function(e) {
+                if (this.files.length > 0) {
+                    const reader = new FileReader();
+                    reader.onload = function(ev) {
+                        htmlInput.value = ev.target.result;
+                        addLog(`📂 File "${fileInput.files[0].name}" dipilih`, 'success');
+                        processHtml(ev.target.result);
+                    };
+                    reader.readAsText(this.files[0]);
+                }
+            });
+
+            // --- Keyboard shortcut: Ctrl+Enter untuk konversi ---
+            htmlInput.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    e.preventDefault();
+                    convertBtn.click();
+                }
+            });
+
+            // ============================================================
+            // 9. INIT
+            // ============================================================
+            addLog('🚀 Siap. Tempelkan HTML atau upload file .html untuk memulai.', 'system');
+            addLog('💡 Tips: Gunakan Ctrl+Enter untuk konversi cepat.', 'info');
+
+        })();
+    </script>
+
+</body>
+</html>
