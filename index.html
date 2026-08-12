@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Elementor HTML Converter — Build Editable Layout</title>
-    <!-- Tailwind CSS via CDN untuk styling tool -->
+    <title>Elementor HTML to ZIP Kit Converter</title>
+    <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <!-- JSZip untuk membuat ZIP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- FileSaver untuk download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
-        /* Custom style untuk drag & drop area */
         .drop-zone {
             border: 2px dashed #d1d5db;
             transition: all 0.3s ease;
@@ -18,12 +21,10 @@
             border-color: #6366f1;
             background-color: #eef2ff;
         }
-        /* Scroll area untuk hasil */
         .preview-scroll {
-            max-height: 500px;
+            max-height: 400px;
             overflow-y: auto;
         }
-        /* Animasi loading */
         .spinner {
             border: 3px solid #e5e7eb;
             border-top: 3px solid #6366f1;
@@ -36,16 +37,35 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        /* Highlight untuk code */
         .code-block {
             background: #1e1e2e;
             color: #cdd6f4;
             font-family: 'Courier New', monospace;
-            font-size: 13px;
+            font-size: 12px;
             padding: 1rem;
             border-radius: 8px;
             white-space: pre-wrap;
             word-break: break-all;
+        }
+        .image-thumb {
+            max-width: 60px;
+            max-height: 60px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid #e5e7eb;
+        }
+        .progress-bar {
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+            transition: width 0.3s;
+        }
+        .progress-bar .fill {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+            width: 0%;
+            transition: width 0.3s;
         }
     </style>
 </head>
@@ -56,11 +76,11 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between">
             <div class="flex items-center space-x-3">
                 <div class="bg-indigo-600 text-white p-2 rounded-lg">
-                    <i class="fas fa-code text-xl"></i>
+                    <i class="fas fa-boxes text-xl"></i>
                 </div>
                 <div>
-                    <h1 class="text-xl font-bold text-gray-800">Elementor HTML Converter</h1>
-                    <p class="text-xs text-gray-500">HTML → Widget Native Elementor (Editable)</p>
+                    <h1 class="text-xl font-bold text-gray-800">Elementor HTML → ZIP Kit</h1>
+                    <p class="text-xs text-gray-500">HTML ke Elementor Kit (.zip) siap impor dengan gambar</p>
                 </div>
             </div>
             <div class="flex items-center space-x-3 text-sm text-gray-500">
@@ -84,12 +104,12 @@
             <i class="fas fa-arrow-right text-gray-300"></i>
             <span class="flex items-center space-x-2 text-gray-400">
                 <span class="bg-gray-300 text-gray-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>
-                <span>Konversi & Analisis</span>
+                <span>Analisis & Ekstrak</span>
             </span>
             <i class="fas fa-arrow-right text-gray-300"></i>
             <span class="flex items-center space-x-2 text-gray-400">
                 <span class="bg-gray-300 text-gray-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
-                <span>Ekspor JSON</span>
+                <span>Export ZIP Kit</span>
             </span>
         </div>
 
@@ -109,13 +129,13 @@
                     </div>
                 </div>
 
-                <!-- Textarea untuk paste manual -->
+                <!-- Textarea -->
                 <div>
                     <label for="htmlInput" class="block text-sm font-medium text-gray-700 mb-1">Tempelkan HTML di sini</label>
-                    <textarea id="htmlInput" rows="10" class="w-full border border-gray-300 rounded-lg p-3 font-mono text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="<html> ... paste kode HTML Anda di sini ... </html>"></textarea>
+                    <textarea id="htmlInput" rows="8" class="w-full border border-gray-300 rounded-lg p-3 font-mono text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="<html> ... paste kode HTML Anda di sini ... </html>"></textarea>
                 </div>
 
-                <!-- Tombol aksi -->
+                <!-- Tombol -->
                 <div class="flex flex-wrap gap-3">
                     <button id="convertBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-6 rounded-lg transition flex items-center space-x-2 shadow-sm">
                         <i class="fas fa-sync-alt"></i>
@@ -131,16 +151,28 @@
                     </button>
                 </div>
 
-                <!-- Info proses -->
-                <div id="infoBox" class="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg hidden">
-                    <i class="fas fa-info-circle text-indigo-500 mr-2"></i>
-                    <span id="infoMessage">Siap memproses...</span>
+                <!-- Progress -->
+                <div id="progressContainer" class="hidden">
+                    <div class="flex justify-between text-sm text-gray-600 mb-1">
+                        <span id="progressLabel">Memproses...</span>
+                        <span id="progressPercent">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="progressFill" class="fill"></div>
+                    </div>
                 </div>
 
-                <!-- Loading -->
-                <div id="loadingIndicator" class="hidden flex items-center space-x-3 p-3 bg-indigo-50 rounded-lg">
-                    <div class="spinner"></div>
-                    <span class="text-indigo-700 font-medium">Menganalisis dan memetakan DOM...</span>
+                <!-- Info -->
+                <div id="infoBox" class="text-sm p-3 rounded-lg hidden"></div>
+
+                <!-- Daftar Gambar yang Ditemukan -->
+                <div id="imageListContainer" class="hidden bg-white rounded-xl border border-gray-200 p-4">
+                    <h4 class="font-medium text-gray-700 text-sm flex items-center space-x-2">
+                        <i class="fas fa-images text-indigo-500"></i>
+                        <span>Gambar Ditemukan</span>
+                        <span id="imageCount" class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full">0</span>
+                    </h4>
+                    <div id="imageList" class="flex flex-wrap gap-2 mt-2 max-h-32 overflow-y-auto"></div>
                 </div>
             </div>
 
@@ -159,8 +191,8 @@
                             <p class="text-xs text-gray-500">Widgets</p>
                         </div>
                         <div>
-                            <p class="text-2xl font-bold text-indigo-600" id="statStyles">0</p>
-                            <p class="text-xs text-gray-500">Styles extracted</p>
+                            <p class="text-2xl font-bold text-indigo-600" id="statImages">0</p>
+                            <p class="text-xs text-gray-500">Images</p>
                         </div>
                     </div>
                 </div>
@@ -181,50 +213,50 @@
 
                 <!-- Tombol Ekspor -->
                 <div class="flex flex-wrap gap-3">
-                    <button id="exportJsonBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-6 rounded-lg transition flex items-center space-x-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                        <i class="fas fa-download"></i>
-                        <span>Export JSON (Impor ke Elementor)</span>
+                    <button id="exportKitBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-6 rounded-lg transition flex items-center space-x-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <i class="fas fa-file-archive"></i>
+                        <span>Export ZIP Kit (Images + JSON)</span>
                     </button>
-                    <button id="exportHtmlBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2.5 px-6 rounded-lg transition flex items-center space-x-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <button id="exportJsonOnlyBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2.5 px-6 rounded-lg transition flex items-center space-x-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                         <i class="fas fa-file-code"></i>
-                        <span>Export Shielded HTML</span>
+                        <span>Export JSON Only</span>
                     </button>
                 </div>
 
-                <!-- Panduan Ekspor -->
+                <!-- Panduan Impor -->
                 <div id="guideBox" class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 hidden">
                     <h4 class="font-semibold flex items-center space-x-2">
                         <i class="fas fa-rocket text-blue-600"></i>
-                        <span>Cara Impor ke Elementor</span>
+                        <span>Cara Impor ZIP Kit ke Elementor</span>
                     </h4>
                     <ol class="list-decimal list-inside space-y-1 mt-2 text-blue-700">
-                        <li>Download file <strong>.json</strong> hasil ekspor</li>
-                        <li>Masuk ke <strong>WordPress Dashboard → Templates → Saved Templates</strong></li>
-                        <li>Klik <strong>Import Templates</strong> dan unggah file .json</li>
-                        <li>Buka halaman Elementor, klik folder <i class="far fa-folder-open"></i> → <strong>My Templates</strong>, lalu sisipkan template</li>
-                        <li><span class="bg-yellow-200 px-2 py-0.5 rounded">Tips:</span> Semua widget <strong>dapat diedit</strong> seperti biasa!</li>
+                        <li>Download file <strong>.zip</strong> hasil ekspor</li>
+                        <li>Masuk ke <strong>WordPress Dashboard → Elementor → Tools</strong></li>
+                        <li>Pilih tab <strong>Import/Export Kit</strong> → klik <strong>Start Import</strong></li>
+                        <li>Upload file <strong>.zip</strong>, lalu pilih <strong>Templates & Content</strong></li>
+                        <li>Template siap digunakan di <strong>Elementor → My Templates</strong></li>
+                        <li><span class="bg-yellow-200 px-2 py-0.5 rounded">Tips:</span> Gambar otomatis terupload ke Media Library!</li>
                     </ol>
                 </div>
             </div>
         </div>
 
-        <!-- ====== BAGIAN BAWAH : LOG DETAIL ====== -->
+        <!-- ====== LOG ====== -->
         <div class="mt-10 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="px-6 py-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
                 <span class="font-medium text-gray-700"><i class="fas fa-list-ul mr-2 text-indigo-500"></i>Log Proses</span>
                 <button id="clearLogBtn" class="text-xs text-gray-400 hover:text-gray-600">Clear log</button>
             </div>
             <div id="logContainer" class="p-4 font-mono text-xs bg-gray-900 text-gray-300 max-h-48 overflow-y-auto">
-                <div class="text-green-400">[System] ✅ Elementor HTML Converter siap digunakan.</div>
+                <div class="text-green-400">[System] ✅ Elementor HTML → ZIP Kit Converter siap.</div>
                 <div class="text-gray-500">[System] Tempelkan HTML atau upload file untuk memulai.</div>
             </div>
         </div>
 
     </main>
 
-    <!-- ========== FOOTER ========== -->
     <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-xs text-gray-400 border-t border-gray-200 mt-8">
-        <p>Built with ❤️ — 100% client-side, private &amp; secure. Tidak ada data yang dikirim ke server.</p>
+        <p>Built with ❤️ — 100% client-side. Gambar diunduh &amp; dibundel ke ZIP. Tidak ada data dikirim ke server.</p>
     </footer>
 
     <!-- ========================================================== -->
@@ -246,24 +278,31 @@
             const jsonOutput = document.getElementById('jsonOutput');
             const jsonSize = document.getElementById('jsonSize');
             const copyJsonBtn = document.getElementById('copyJsonBtn');
-            const exportJsonBtn = document.getElementById('exportJsonBtn');
-            const exportHtmlBtn = document.getElementById('exportHtmlBtn');
+            const exportKitBtn = document.getElementById('exportKitBtn');
+            const exportJsonOnlyBtn = document.getElementById('exportJsonOnlyBtn');
             const loadingIndicator = document.getElementById('loadingIndicator');
             const infoBox = document.getElementById('infoBox');
-            const infoMessage = document.getElementById('infoMessage');
             const statsBox = document.getElementById('statsBox');
             const statContainers = document.getElementById('statContainers');
             const statWidgets = document.getElementById('statWidgets');
-            const statStyles = document.getElementById('statStyles');
+            const statImages = document.getElementById('statImages');
             const guideBox = document.getElementById('guideBox');
             const logContainer = document.getElementById('logContainer');
             const clearLogBtn = document.getElementById('clearLogBtn');
+            const imageListContainer = document.getElementById('imageListContainer');
+            const imageList = document.getElementById('imageList');
+            const imageCount = document.getElementById('imageCount');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressFill = document.getElementById('progressFill');
+            const progressLabel = document.getElementById('progressLabel');
+            const progressPercent = document.getElementById('progressPercent');
 
             // ============================================================
             // 2. STATE
             // ============================================================
-            let currentJson = null; // object JSON final
-            let currentShieldedHtml = null; // string HTML terisolasi
+            let currentJson = null;
+            let currentImages = []; // [{ originalUrl, filename, dataUrl }]
+            let currentHtml = '';
 
             // ============================================================
             // 3. LOGGING
@@ -291,110 +330,156 @@
             clearLogBtn.addEventListener('click', clearLog);
 
             // ============================================================
-            // 4. UTILITY FUNCTIONS
+            // 4. PROGRESS
+            // ============================================================
+            function setProgress(percent, label) {
+                progressContainer.classList.remove('hidden');
+                progressFill.style.width = percent + '%';
+                progressPercent.textContent = percent + '%';
+                if (label) progressLabel.textContent = label;
+            }
+
+            function hideProgress() {
+                progressContainer.classList.add('hidden');
+                progressFill.style.width = '0%';
+            }
+
+            // ============================================================
+            // 5. UTILITY
             // ============================================================
             function generateId(length = 8) {
                 return 'mp-' + Math.random().toString(36).substring(2, 2 + length);
             }
 
-            // Format JSON dengan indentation
             function prettyJson(obj) {
                 return JSON.stringify(obj, null, 2);
             }
 
-            // Download file
-            function downloadFile(content, filename, mime = 'application/json') {
-                const blob = new Blob([content], { type: mime });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                addLog(`📥 File "${filename}" didownload (${(blob.size / 1024).toFixed(1)} KB)`, 'success');
+            function sanitizeFilename(url) {
+                try {
+                    const u = new URL(url);
+                    let filename = u.pathname.split('/').pop();
+                    if (!filename || filename === '/') filename = 'image-' + Date.now();
+                    return filename;
+                } catch {
+                    let filename = url.split('/').pop().split('?')[0];
+                    if (!filename || filename === '/') filename = 'image-' + Date.now();
+                    return filename;
+                }
+            }
+
+            function getExtension(filename) {
+                const ext = filename.split('.').pop().toLowerCase();
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext)) return ext;
+                return 'jpg';
             }
 
             // ============================================================
-            // 5. CORE CONVERTER — sesuai alur kerja
+            // 6. DOWNLOAD IMAGES
             // ============================================================
+            async function downloadImage(url) {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    img.onload = function() {
+                        try {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.naturalWidth || img.width;
+                            canvas.height = img.naturalHeight || img.height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0);
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+                            resolve(dataUrl);
+                        } catch (e) {
+                            reject(e);
+                        }
+                    };
+                    img.onerror = function() {
+                        reject(new Error('Gagal load: ' + url));
+                    };
+                    img.src = url;
+                });
+            }
+
+            // ============================================================
+            // 7. CORE CONVERTER
+            // ============================================================
+            function extractImagesFromHtml(html) {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const images = [];
+                const seen = new Set();
+                const imgs = doc.querySelectorAll('img[src]');
+                imgs.forEach(el => {
+                    const src = el.getAttribute('src');
+                    if (src && !src.startsWith('data:') && !seen.has(src)) {
+                        seen.add(src);
+                        images.push({
+                            originalUrl: src,
+                            filename: sanitizeFilename(src),
+                            dataUrl: null
+                        });
+                    }
+                });
+                return images;
+            }
+
             function convertHtmlToElementor(htmlString) {
                 addLog('🔄 Memulai konversi HTML → Elementor JSON...', 'info');
 
-                // --- STEP 1: Parse DOM ---
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlString, 'text/html');
                 const body = doc.body;
 
-                // Ekstrak computed styles (simulasi: kita baca dari elemen)
-                // Catatan: di real app, kita perlu memasukkan CSS untuk di-compute.
-                // Di sini kita gunakan pendekatan: baca inline style + tebak dari tag.
-
-                addLog('📄 DOM parsed, memulai traversal...', 'info');
-
-                // --- STEP 2: Filtering (hapus script, style, meta) ---
+                // Hapus tag non-visual
                 const unwanted = ['script', 'style', 'meta', 'link', 'noscript'];
                 unwanted.forEach(tag => {
                     const els = body.querySelectorAll(tag);
                     els.forEach(el => el.remove());
                 });
-                addLog(`🧹 Filtered: removed ${unwanted.join(', ')}`, 'info');
 
-                // --- STEP 3: Recursive DOM Traversal & Mapping ---
                 let containerCount = 0;
                 let widgetCount = 0;
-                let styleCount = 0;
 
-                // Fungsi untuk mengekstrak style dari elemen
                 function extractStyles(el) {
                     const styles = {};
                     const computed = window.getComputedStyle(el);
-                    // Ambil properti yang umum
                     const props = [
                         'color', 'font-family', 'font-size', 'font-weight',
                         'line-height', 'text-align', 'background-color',
                         'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
                         'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-                        'border-radius', 'border-width', 'border-color',
-                        'display', 'flex-direction', 'justify-content', 'align-items',
-                        'gap', 'width', 'height', 'max-width', 'min-height'
+                        'border-radius', 'display', 'flex-direction', 'justify-content',
+                        'align-items', 'gap', 'width', 'height', 'max-width'
                     ];
                     props.forEach(p => {
                         const val = computed.getPropertyValue(p);
                         if (val && val !== 'none' && val !== 'normal' && val !== '0px') {
                             styles[p] = val;
-                            styleCount++;
                         }
                     });
-                    // Inline style override
                     if (el.style.cssText) {
                         const inline = el.style;
                         for (let i = 0; i < inline.length; i++) {
                             const key = inline[i];
                             const val = inline.getPropertyValue(key);
-                            if (val) {
-                                styles[key] = val;
-                            }
+                            if (val) styles[key] = val;
                         }
                     }
                     return styles;
                 }
 
-                // Fungsi rekursif utama
                 function mapNode(el) {
                     const children = el.children;
                     const hasChildElements = children.length > 0;
 
-                    // Tentukan apakah container atau widget
                     const isContainer = hasChildElements &&
                         (el.tagName.match(/^(DIV|SECTION|HEADER|FOOTER|MAIN|ARTICLE|ASIDE|NAV|UL|OL|LI)$/i) ||
-                        el.style.display === 'flex' || el.style.display === 'grid' ||
-                        el.style.display === 'block');
+                            el.style.display === 'flex' || el.style.display === 'grid' ||
+                            el.style.display === 'block');
 
                     if (isContainer) {
                         containerCount++;
-                        // --- MAP ke Container ---
                         const container = {
                             id: generateId(),
                             elType: 'container',
@@ -408,9 +493,7 @@
                             elements: []
                         };
 
-                        // Ekstrak style ke settings
                         const styles = extractStyles(el);
-                        // Map padding
                         if (styles['padding-top']) container.settings.padding = {
                             unit: 'px',
                             top: styles['padding-top'],
@@ -419,7 +502,6 @@
                             left: styles['padding-left'] || '0'
                         };
                         if (styles['background-color']) container.settings.background_color = styles['background-color'];
-                        // Flex
                         if (styles['display'] === 'flex') {
                             container.settings.flex_direction = styles['flex-direction'] || 'column';
                             container.settings.flex_justify_content = styles['justify-content'] || 'flex-start';
@@ -427,22 +509,17 @@
                             if (styles['gap']) container.settings.flex_gap = styles['gap'];
                         }
 
-                        // Proses anak
                         for (let child of children) {
                             const mapped = mapNode(child);
                             if (mapped) container.elements.push(mapped);
                         }
-
                         return container;
-
                     } else {
-                        // --- MAP ke Widget ---
                         widgetCount++;
                         const tag = el.tagName.toLowerCase();
                         let widgetType = 'text-editor';
                         let settings = {};
 
-                        // Tentukan widgetType
                         if (tag.match(/^h[1-6]$/)) widgetType = 'heading';
                         else if (tag === 'p') widgetType = 'text-editor';
                         else if (tag === 'img') widgetType = 'image';
@@ -450,44 +527,43 @@
                         else if (tag === 'ul' || tag === 'ol') widgetType = 'text-editor';
                         else if (tag === 'blockquote') widgetType = 'text-editor';
                         else if (tag === 'figure') widgetType = 'image';
-                        else if (tag === 'iframe') widgetType = 'html';
-                        else widgetType = 'text-editor'; // fallback
 
-                        // Ekstrak style
                         const styles = extractStyles(el);
 
-                        // Isi settings
                         if (widgetType === 'heading') {
                             settings.title = el.textContent.trim() || 'Heading';
                             settings.header_size = 'h' + (tag.replace('h', '') || '2');
                             if (styles['color']) settings.title_color = styles['color'];
                             if (styles['font-family']) settings.typography_font_family = styles['font-family'];
-                            if (styles['font-size']) settings.typography_font_size = { unit: 'px', size: styles['font-size'] };
+                            if (styles['font-size']) settings.typography_font_size = { unit: 'px', size: styles[
+                                    'font-size'] };
                             if (styles['font-weight']) settings.typography_font_weight = styles['font-weight'];
                             if (styles['text-align']) settings.align = styles['text-align'];
                         } else if (widgetType === 'text-editor') {
                             settings.editor = `<p>${el.innerHTML || el.textContent}</p>`;
                             if (styles['color']) settings.text_color = styles['color'];
                             if (styles['font-family']) settings.typography_font_family = styles['font-family'];
-                            if (styles['font-size']) settings.typography_font_size = { unit: 'px', size: styles['font-size'] };
+                            if (styles['font-size']) settings.typography_font_size = { unit: 'px', size: styles[
+                                    'font-size'] };
                         } else if (widgetType === 'image') {
                             const src = el.getAttribute('src') || el.querySelector('img')?.getAttribute('src') || '';
+                            const alt = el.getAttribute('alt') || el.querySelector('img')?.getAttribute('alt') || '';
+                            // Simpan URL asli untuk diproses nanti
+                            settings._image_url = src;
                             settings.image = { url: src };
-                            if (el.getAttribute('alt')) settings.image_alt = el.getAttribute('alt');
-                            if (styles['width']) settings.width = { unit: '%', size: '100' };
+                            if (alt) settings.image_alt = alt;
                         } else if (widgetType === 'button') {
                             settings.text = el.textContent.trim() || 'Button';
-                            const href = el.getAttribute('href') || '#';
-                            settings.link = { url: href };
+                            settings.link = { url: el.getAttribute('href') || '#' };
                             if (styles['background-color']) settings.background_color = styles['background-color'];
                             if (styles['color']) settings.button_text_color = styles['color'];
-                            if (styles['border-radius']) settings.border_radius = { unit: 'px', top: styles['border-radius'] };
+                            if (styles['border-radius']) settings.border_radius = { unit: 'px', top: styles[
+                                    'border-radius'] };
                         } else {
-                            // fallback text
                             settings.editor = `<div>${el.outerHTML}</div>`;
                         }
 
-                        // Tambahkan padding/margin umum
+                        // Padding/margin umum
                         if (styles['padding-top']) settings.padding = {
                             unit: 'px',
                             top: styles['padding-top'],
@@ -503,42 +579,22 @@
                             left: styles['margin-left'] || '0'
                         };
 
-                        // Tambahkan CSS custom jika ada style yang tidak terpetakan (fallback)
-                        const customCss = [];
-                        for (const [key, val] of Object.entries(styles)) {
-                            if (!['color', 'font-family', 'font-size', 'font-weight', 'line-height', 'text-align',
-                                    'background-color', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-                                    'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'border-radius',
-                                    'display', 'flex-direction', 'justify-content', 'align-items', 'gap',
-                                    'width', 'height', 'max-width', 'min-height'
-                                ].includes(key)) {
-                                customCss.push(`${key}: ${val};`);
-                            }
-                        }
-                        if (customCss.length > 0) {
-                            settings._custom_css = customCss.join(' ');
-                            addLog(`⚠️ ${widgetType} memiliki gaya tambahan (${customCss.length}) disimpan di _custom_css`, 'warning');
-                        }
-
                         const widget = {
                             id: generateId(),
                             elType: 'widget',
                             widgetType: widgetType,
                             settings: settings
                         };
-
                         return widget;
                     }
                 }
 
-                // Mulai traversal dari body
                 const rootElements = [];
                 for (let child of body.children) {
                     const mapped = mapNode(child);
                     if (mapped) rootElements.push(mapped);
                 }
 
-                // --- STEP 4: Assembly JSON Schema ---
                 const finalJson = {
                     version: '0.4',
                     title: 'Converted from HTML',
@@ -547,135 +603,255 @@
                     page_settings: {}
                 };
 
-                addLog(`✅ Konversi selesai: ${containerCount} containers, ${widgetCount} widgets, ${styleCount} styles`, 'success');
-
-                // Update stat
+                addLog(`✅ Konversi selesai: ${containerCount} containers, ${widgetCount} widgets`, 'success');
                 statContainers.textContent = containerCount;
                 statWidgets.textContent = widgetCount;
-                statStyles.textContent = styleCount;
-                statsBox.classList.remove('hidden');
 
                 return finalJson;
             }
 
             // ============================================================
-            // 6. SHIELDED HTML GENERATOR (opsional)
+            // 8. MAIN PROCESS
             // ============================================================
-            function generateShieldedHtml(htmlString) {
-                const scopeId = generateId();
-                // Tambahkan scoping: bungkus dengan div ber-ID, lalu prefix selector
-                // Sederhana: kita wrap body dengan div scope
-                const wrapped = `<div id="${scopeId}" style="all: initial; display: block;">${htmlString}</div>`;
-                // Tambahkan reset style
-                const resetCss = `
-                    #${scopeId} * {
-                        box-sizing: border-box;
-                        margin: 0;
-                        padding: 0;
-                    }
-                `;
-                const full = `
-                    <style>${resetCss}</style>
-                    ${wrapped}
-                `;
-                return full;
-            }
-
-            // ============================================================
-            // 7. MAIN PROCESS
-            // ============================================================
-            function processHtml(htmlString) {
+            async function processHtml(htmlString) {
                 if (!htmlString || htmlString.trim().length < 10) {
                     addLog('❌ HTML terlalu pendek atau kosong.', 'error');
-                    infoMessage.textContent = 'Error: HTML tidak valid atau terlalu pendek.';
-                    infoBox.classList.remove('hidden');
+                    showInfo('Error: HTML tidak valid atau terlalu pendek.', 'error');
                     return;
                 }
 
+                currentHtml = htmlString;
+
                 // Tampilkan loading
-                loadingIndicator.classList.remove('hidden');
                 convertBtn.disabled = true;
-                exportJsonBtn.disabled = true;
-                exportHtmlBtn.disabled = true;
-                infoBox.classList.add('hidden');
+                exportKitBtn.disabled = true;
+                exportJsonOnlyBtn.disabled = true;
+                hideProgress();
                 statsBox.classList.add('hidden');
                 guideBox.classList.add('hidden');
+                imageListContainer.classList.add('hidden');
+                document.getElementById('infoBox').classList.add('hidden');
 
-                // Proses dengan sedikit delay agar UI ter-update
-                setTimeout(() => {
-                    try {
-                        // Normalisasi: pastikan ada body
-                        let cleanHtml = htmlString;
-                        if (!cleanHtml.match(/<body/i)) {
-                            cleanHtml = `<body>${cleanHtml}</body>`;
-                        }
-                        if (!cleanHtml.match(/<html/i)) {
-                            cleanHtml = `<html>${cleanHtml}</html>`;
-                        }
+                try {
+                    // STEP 1: Ekstrak gambar dari HTML
+                    setProgress(10, 'Menganalisis HTML...');
+                    const imageRefs = extractImagesFromHtml(htmlString);
+                    currentImages = imageRefs;
+                    statImages.textContent = imageRefs.length;
 
-                        // Konversi
-                        const result = convertHtmlToElementor(cleanHtml);
-                        currentJson = result;
-
-                        // Tampilkan JSON
-                        const jsonStr = prettyJson(result);
-                        jsonOutput.textContent = jsonStr;
-                        jsonSize.textContent = `${(jsonStr.length / 1024).toFixed(1)} KB`;
-
-                        // Generate shielded HTML
-                        currentShieldedHtml = generateShieldedHtml(cleanHtml);
-
-                        // Aktifkan tombol ekspor
-                        exportJsonBtn.disabled = false;
-                        exportHtmlBtn.disabled = false;
-
-                        // Tampilkan panduan
-                        guideBox.classList.remove('hidden');
-
-                        addLog(`📊 JSON size: ${(jsonStr.length / 1024).toFixed(1)} KB`, 'info');
-                        infoMessage.textContent = `✅ Konversi berhasil! ${result.content.length} elemen root.`;
-                        infoBox.classList.remove('hidden');
-                        infoBox.className = 'text-sm bg-green-50 p-3 rounded-lg border border-green-200';
-
-                    } catch (err) {
-                        addLog(`❌ Error: ${err.message}`, 'error');
-                        infoMessage.textContent = `Error: ${err.message}`;
-                        infoBox.classList.remove('hidden');
-                        infoBox.className = 'text-sm bg-red-50 p-3 rounded-lg border border-red-200';
-                        jsonOutput.textContent = `// Error: ${err.message}`;
-                    } finally {
-                        loadingIndicator.classList.add('hidden');
-                        convertBtn.disabled = false;
+                    // Tampilkan daftar gambar
+                    if (imageRefs.length > 0) {
+                        imageListContainer.classList.remove('hidden');
+                        imageCount.textContent = imageRefs.length;
+                        imageList.innerHTML = '';
+                        imageRefs.forEach(img => {
+                            const div = document.createElement('div');
+                            div.className = 'flex items-center space-x-2 bg-gray-50 rounded-lg p-2 text-xs';
+                            const placeholder = document.createElement('span');
+                            placeholder.className = 'text-gray-400';
+                            placeholder.textContent = '🖼️ ' + img.filename;
+                            div.appendChild(placeholder);
+                            imageList.appendChild(div);
+                        });
                     }
-                }, 300);
+
+                    // STEP 2: Download gambar (jika ada)
+                    if (imageRefs.length > 0) {
+                        setProgress(20, `Mengunduh ${imageRefs.length} gambar...`);
+                        let downloaded = 0;
+                        for (let i = 0; i < imageRefs.length; i++) {
+                            const img = imageRefs[i];
+                            try {
+                                const dataUrl = await downloadImage(img.originalUrl);
+                                img.dataUrl = dataUrl;
+                                // Update tampilan
+                                const items = imageList.querySelectorAll('div');
+                                if (items[i]) {
+                                    items[i].innerHTML = `<img src="${dataUrl}" class="image-thumb" /> <span class="truncate max-w-[100px]">${img.filename}</span>`;
+                                }
+                                downloaded++;
+                                const pct = 20 + Math.round((i + 1) / imageRefs.length * 60);
+                                setProgress(pct, `Mengunduh gambar ${i+1}/${imageRefs.length}...`);
+                            } catch (e) {
+                                addLog(`⚠️ Gagal download ${img.filename}: ${e.message}`, 'warning');
+                            }
+                        }
+                        addLog(`📥 ${downloaded}/${imageRefs.length} gambar berhasil diunduh.`, 'success');
+                    } else {
+                        setProgress(30, 'Tidak ada gambar ditemukan.');
+                    }
+
+                    // STEP 3: Konversi HTML ke JSON
+                    setProgress(85, 'Mengonversi ke Elementor JSON...');
+                    const result = convertHtmlToElementor(htmlString);
+                    currentJson = result;
+
+                    // Tampilkan JSON
+                    const jsonStr = prettyJson(result);
+                    jsonOutput.textContent = jsonStr;
+                    jsonSize.textContent = `${(jsonStr.length / 1024).toFixed(1)} KB`;
+
+                    // Aktifkan tombol
+                    exportKitBtn.disabled = false;
+                    exportJsonOnlyBtn.disabled = false;
+                    guideBox.classList.remove('hidden');
+
+                    setProgress(100, 'Selesai!');
+                    setTimeout(hideProgress, 1000);
+
+                    showInfo(`✅ Konversi berhasil! ${result.content.length} elemen root, ${currentImages.length} gambar ditemukan.`, 'success');
+
+                } catch (err) {
+                    addLog(`❌ Error: ${err.message}`, 'error');
+                    showInfo(`Error: ${err.message}`, 'error');
+                    jsonOutput.textContent = `// Error: ${err.message}`;
+                    hideProgress();
+                } finally {
+                    convertBtn.disabled = false;
+                }
             }
 
             // ============================================================
-            // 8. EVENT LISTENERS
+            // 9. EXPORT FUNCTIONS
+            // ============================================================
+            async function exportZipKit() {
+                if (!currentJson) {
+                    addLog('❌ Tidak ada data untuk diekspor.', 'error');
+                    return;
+                }
+
+                try {
+                    setProgress(0, 'Membuat ZIP...');
+                    addLog('📦 Membuat Elementor Kit ZIP...', 'info');
+
+                    const zip = new JSZip();
+                    const imagesFolder = zip.folder('images');
+                    const jsonStr = prettyJson(currentJson);
+
+                    // Tambahkan template.json
+                    zip.file('template.json', jsonStr);
+
+                    // Tambahkan gambar yang berhasil diunduh
+                    let imageCount = 0;
+                    for (const img of currentImages) {
+                        if (img.dataUrl) {
+                            const ext = getExtension(img.filename);
+                            const base64 = img.dataUrl.split(',')[1];
+                            const filename = img.filename.replace(/\.[^.]+$/, '') + '.' + ext;
+                            imagesFolder.file(filename, base64, { base64: true });
+                            imageCount++;
+                            setProgress(Math.round((imageCount / currentImages.length) * 50) + 20, `Menambahkan ${filename}...`);
+                        }
+                    }
+
+                    // Perbaiki URL gambar di JSON jika ada gambar yang diunduh
+                    if (imageCount > 0) {
+                        setProgress(75, 'Memperbaiki referensi gambar di JSON...');
+                        // Fungsi rekursif untuk update URL gambar di settings
+                        function fixImageUrls(obj) {
+                            if (Array.isArray(obj)) {
+                                obj.forEach(item => fixImageUrls(item));
+                            } else if (obj && typeof obj === 'object') {
+                                for (const key in obj) {
+                                    if (key === '_image_url' && obj[key]) {
+                                        const filename = sanitizeFilename(obj[key]);
+                                        const ext = getExtension(filename);
+                                        const newFilename = filename.replace(/\.[^.]+$/, '') + '.' + ext;
+                                        // Cek apakah gambar ada di daftar yang berhasil diunduh
+                                        const found = currentImages.find(img =>
+                                            img.dataUrl && sanitizeFilename(img.originalUrl).replace(/\.[^.]+$/, '') ===
+                                            filename.replace(/\.[^.]+$/, '')
+                                        );
+                                        if (found) {
+                                            // Ganti URL dengan path relatif ke images/
+                                            obj.image = { url: `./images/${newFilename}` };
+                                            delete obj._image_url;
+                                        }
+                                    } else {
+                                        fixImageUrls(obj[key]);
+                                    }
+                                }
+                            }
+                        }
+                        // Clone JSON dan perbaiki
+                        const jsonCopy = JSON.parse(JSON.stringify(currentJson));
+                        fixImageUrls(jsonCopy);
+                        // Update file template.json dengan URL yang sudah diperbaiki
+                        zip.file('template.json', prettyJson(jsonCopy));
+                        // Simpan juga untuk state
+                        currentJson = jsonCopy;
+                        jsonOutput.textContent = prettyJson(jsonCopy);
+                        addLog(`✅ URL gambar diperbaiki untuk ${imageCount} gambar.`, 'success');
+                    }
+
+                    setProgress(95, 'Mengompres ZIP...');
+                    const zipBlob = await zip.generateAsync({ type: 'blob' });
+                    const kitName = `elementor-kit-${Date.now()}.zip`;
+                    saveAs(zipBlob, kitName);
+
+                    addLog(`📥 Kit "${kitName}" berhasil didownload (${(zipBlob.size / 1024).toFixed(1)} KB)`, 'success');
+                    hideProgress();
+
+                } catch (err) {
+                    addLog(`❌ Gagal membuat ZIP: ${err.message}`, 'error');
+                    showInfo(`Error: ${err.message}`, 'error');
+                    hideProgress();
+                }
+            }
+
+            function exportJsonOnly() {
+                if (!currentJson) {
+                    addLog('❌ Tidak ada JSON untuk diekspor.', 'error');
+                    return;
+                }
+                const jsonStr = prettyJson(currentJson);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                saveAs(blob, `elementor-template-${Date.now()}.json`);
+                addLog('📥 JSON template didownload.', 'success');
+            }
+
+            // ============================================================
+            // 10. UI HELPERS
+            // ============================================================
+            function showInfo(message, type = 'info') {
+                const box = document.getElementById('infoBox');
+                box.classList.remove('hidden');
+                box.className = 'text-sm p-3 rounded-lg border ' +
+                    (type === 'success' ? 'bg-green-50 border-green-200 text-green-700' :
+                        type === 'error' ? 'bg-red-50 border-red-200 text-red-700' :
+                        'bg-blue-50 border-blue-200 text-blue-700');
+                box.innerHTML = message;
+            }
+
+            // ============================================================
+            // 11. EVENT LISTENERS
             // ============================================================
 
-            // --- Convert button ---
+            // Convert
             convertBtn.addEventListener('click', function() {
                 const html = htmlInput.value;
                 processHtml(html);
             });
 
-            // --- Clear button ---
+            // Clear
             clearBtn.addEventListener('click', function() {
                 htmlInput.value = '';
                 jsonOutput.textContent = '// Hasil konversi akan tampil di sini';
                 jsonSize.textContent = '';
                 statsBox.classList.add('hidden');
                 guideBox.classList.add('hidden');
-                exportJsonBtn.disabled = true;
-                exportHtmlBtn.disabled = true;
+                imageListContainer.classList.add('hidden');
+                exportKitBtn.disabled = true;
+                exportJsonOnlyBtn.disabled = true;
                 currentJson = null;
-                currentShieldedHtml = null;
-                infoBox.classList.add('hidden');
+                currentImages = [];
+                currentHtml = '';
+                hideProgress();
+                document.getElementById('infoBox').classList.add('hidden');
                 addLog('🧹 Semua data dibersihkan.', 'system');
             });
 
-            // --- Sample HTML ---
+            // Sample
             sampleBtn.addEventListener('click', function() {
                 const sample = `<!DOCTYPE html>
         <html>
@@ -683,7 +859,7 @@
         <body>
           <header style="background: #4f46e5; color: white; padding: 20px; text-align: center;">
             <h1>Selamat Datang di Converter</h1>
-            <p style="font-size: 18px;">Ubah HTML menjadi widget Elementor yang dapat diedit!</p>
+            <p style="font-size: 18px;">Ubah HTML menjadi Elementor Kit dengan gambar!</p>
           </header>
           <section style="display: flex; gap: 20px; padding: 30px; max-width: 900px; margin: auto;">
             <div style="flex: 1; background: #f3f4f6; padding: 20px; border-radius: 12px;">
@@ -693,8 +869,8 @@
             </div>
             <div style="flex: 1; background: #f3f4f6; padding: 20px; border-radius: 12px;">
               <h2>Fitur 2</h2>
-              <p>Ekspor JSON siap impor ke Elementor Templates.</p>
-              <img src="https://placehold.co/400x200/4f46e5/white?text=Preview" style="width: 100%; border-radius: 8px;" />
+              <p>Ekspor ZIP Kit siap impor ke Elementor Tools.</p>
+              <img src="https://placehold.co/600x400/4f46e5/white?text=Preview+Image" style="width: 100%; border-radius: 8px;" />
             </div>
           </section>
           <footer style="text-align: center; padding: 20px; color: #6b7280; border-top: 1px solid #e5e7eb; margin-top: 20px;">
@@ -704,38 +880,22 @@
         </html>`;
                 htmlInput.value = sample;
                 addLog('📝 Sample HTML dimuat.', 'info');
-                // Auto convert
                 processHtml(sample);
             });
 
-            // --- Export JSON ---
-            exportJsonBtn.addEventListener('click', function() {
-                if (!currentJson) {
-                    addLog('❌ Tidak ada data JSON untuk diekspor.', 'error');
-                    return;
-                }
-                const jsonStr = prettyJson(currentJson);
-                downloadFile(jsonStr, 'elementor-template.json', 'application/json');
-            });
+            // Export ZIP Kit
+            exportKitBtn.addEventListener('click', exportZipKit);
 
-            // --- Export Shielded HTML ---
-            exportHtmlBtn.addEventListener('click', function() {
-                if (!currentShieldedHtml) {
-                    addLog('❌ Tidak ada HTML untuk diekspor.', 'error');
-                    return;
-                }
-                downloadFile(currentShieldedHtml, 'shielded-widget.html', 'text/html');
-                addLog('🛡️ Shielded HTML didownload. Bisa dipaste ke widget Custom HTML Elementor.', 'success');
-            });
+            // Export JSON Only
+            exportJsonOnlyBtn.addEventListener('click', exportJsonOnly);
 
-            // --- Copy JSON ---
+            // Copy JSON
             copyJsonBtn.addEventListener('click', function() {
                 const text = jsonOutput.textContent;
                 if (text && !text.startsWith('//')) {
                     navigator.clipboard.writeText(text).then(() => {
-                        addLog('📋 JSON berhasil disalin ke clipboard!', 'success');
+                        addLog('📋 JSON berhasil disalin!', 'success');
                     }).catch(() => {
-                        // fallback
                         const range = document.createRange();
                         range.selectNode(jsonOutput);
                         window.getSelection().removeAllRanges();
@@ -743,12 +903,10 @@
                         document.execCommand('copy');
                         addLog('📋 JSON disalin (fallback).', 'success');
                     });
-                } else {
-                    addLog('❌ Tidak ada JSON untuk disalin.', 'warning');
                 }
             });
 
-            // --- Drag & Drop ---
+            // Drag & Drop
             dropZone.addEventListener('dragover', function(e) {
                 e.preventDefault();
                 this.classList.add('dragover');
@@ -765,7 +923,8 @@
                     const reader = new FileReader();
                     reader.onload = function(ev) {
                         htmlInput.value = ev.target.result;
-                        addLog(`📂 File "${files[0].name}" dimuat (${(ev.target.result.length / 1024).toFixed(1)} KB)`, 'success');
+                        addLog(`📂 File "${files[0].name}" dimuat (${(ev.target.result.length / 1024).toFixed(1)} KB)`,
+                            'success');
                         processHtml(ev.target.result);
                     };
                     reader.readAsText(files[0]);
@@ -788,7 +947,7 @@
                 }
             });
 
-            // --- Keyboard shortcut: Ctrl+Enter untuk konversi ---
+            // Keyboard: Ctrl+Enter
             htmlInput.addEventListener('keydown', function(e) {
                 if (e.ctrlKey && e.key === 'Enter') {
                     e.preventDefault();
@@ -797,10 +956,11 @@
             });
 
             // ============================================================
-            // 9. INIT
+            // 12. INIT
             // ============================================================
             addLog('🚀 Siap. Tempelkan HTML atau upload file .html untuk memulai.', 'system');
-            addLog('💡 Tips: Gunakan Ctrl+Enter untuk konversi cepat.', 'info');
+            addLog('💡 Tips: Tool ini akan mengunduh gambar & membundel ke ZIP Kit.', 'info');
+            addLog('📦 ZIP Kit siap diimpor via Elementor → Tools → Import Kit.', 'info');
 
         })();
     </script>
